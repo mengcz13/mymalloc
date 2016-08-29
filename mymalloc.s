@@ -144,6 +144,10 @@ my_mem_allocator:
     movl FRONT_FTR_OFFSET(%eax), %ecx
     andl $SIZE_MASK, %ecx
     subl %ecx, %eax
+    movl HDR_PRED_ADDR_OFFSET(%eax), %ecx
+    movl HDR_SUCC_ADDR_OFFSET(%eax), %esi
+    movl %esi, HDR_SUCC_ADDR_OFFSET(%ecx)
+    movl %ecx, HDR_PRED_ADDR_OFFSET(%esi)
   .NEW_BRK:
     leal (%eax, %edx), %ebx
     movl current_break, %ecx
@@ -180,6 +184,84 @@ my_mem_allocator:
     jmp .LOOP
 
   .RETURN:
+    movl %ebp, %esp
+    popl %ebp
+    ret
+
+.globl my_mem_free
+.type my_mem_free, @function
+.equ ST_MEM_PT, 8
+my_mem_free:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %ebx
+
+    movl ST_MEM_PT(%ebp), %eax # get pointer to free
+    leal -4(%eax), %eax # move pointer to its header
+    movl %eax, %ebx
+  .GO_BACK:  
+    movl (%eax), %ecx
+    andl $SIZE_MASK, %ecx
+    leal (%eax, %ecx), %eax
+    movl (%eax), %ecx
+    andl $THIS_AVAIL_MASK, %ecx
+    jz .GO_FRONT
+    # unlink
+    movl HDR_PRED_ADDR_OFFSET(%eax), %ecx
+    movl HDR_SUCC_ADDR_OFFSET(%eax), %edx
+    movl %edx, HDR_SUCC_ADDR_OFFSET(%ecx)
+    movl %ecx, HDR_PRED_ADDR_OFFSET(%edx)
+    jmp .GO_BACK
+
+  .GO_FRONT:
+    movl (%ebx), %ecx
+    andl $FRONT_AVAIL_MASK, %ecx
+    jz .FINAL
+    movl FRONT_FTR_OFFSET(%ebx), %ecx
+    andl $SIZE_MASK, %ecx
+    subl %ecx, %ebx
+    # unlink
+    movl HDR_PRED_ADDR_OFFSET(%ebx), %ecx
+    movl HDR_SUCC_ADDR_OFFSET(%ebx), %edx
+    movl %edx, HDR_SUCC_ADDR_OFFSET(%ecx)
+    movl %ecx, HDR_PRED_ADDR_OFFSET(%edx)
+    jmp .GO_FRONT
+
+  .FINAL:
+    # to be done: shrink if possible and necessary!
+    movl %eax, %ecx
+    subl %ebx, %ecx
+    jmp .NO_SHRINK
+    cmpl %eax, current_break
+    je .SHRINK
+  .NO_SHRINK:  
+    leal 1(%ecx), %ecx
+    movl %ecx, (%ebx)
+    movl %ecx, FRONT_FTR_OFFSET(%eax)
+    orl $0x2, (%eax)
+    movl free_mem_head, %eax
+    movl HDR_SUCC_ADDR_OFFSET(%eax), %ecx
+    movl %eax, HDR_PRED_ADDR_OFFSET(%ebx)
+    movl %ecx, HDR_SUCC_ADDR_OFFSET(%ebx)
+    movl %ebx, HDR_SUCC_ADDR_OFFSET(%eax)
+    movl %ebx, HDR_PRED_ADDR_OFFSET(%ecx)
+    jmp .RETFREE
+  .SHRINK:
+    cmpl $CHUNKSIZE, %ecx
+    jl .NO_SHRINK
+    movl (%eax), %ecx
+    movl %ecx, (%ebx)
+    movl 4(%eax), %ecx
+    movl %ecx, 4(%ebx)
+    movl %ebx, HDR_SUCC_ADDR_OFFSET(%ecx)
+    movl %ebx, current_break
+    leal 8(%ebx), %ebx
+    movl $SYS_BRK, %eax
+    int $LINUX_SYSCALL
+    
+
+  .RETFREE:  
+    popl %ebx
     movl %ebp, %esp
     popl %ebp
     ret

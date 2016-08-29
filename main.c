@@ -4,17 +4,26 @@ void my_mem_init();
 // allocator
 void* my_mem_allocator(unsigned int size);
 
-#include <stdio.h>
+// free
+void my_mem_free(void* p);
 
+#include <stdio.h>
+#define N 20
+#define BLOCK 1024
 int main() {
     my_mem_init();
-    int* p1 = (int*)my_mem_allocator(8192*sizeof(int));
-    int i = 0;
-    for (i = 0; i < 8192; ++i) {
-        p1[i] = i + 1;
+    int* parray[N] = {0};
+    for (int i = 0; i < N; ++i) {
+        parray[i] = my_mem_allocator(100* sizeof(int));
+        printf("0x%8.x\n", parray[i]);
     }
-    for (i = 0; i < 8192; ++i) {
-        printf("%d\n", p1[i]);
-    }
+    my_mem_free(parray[2]);
+    my_mem_free(parray[0]);
+    my_mem_free(parray[1]);
+    my_mem_free(parray[5]);
+    int* n1 = my_mem_allocator(300*sizeof(int));
+    int* n2 = my_mem_allocator(50*sizeof(int));
+    printf("0x%8.x\n", n1);
+    printf("0x%8.x\n", n2);
     return 0;
 }
